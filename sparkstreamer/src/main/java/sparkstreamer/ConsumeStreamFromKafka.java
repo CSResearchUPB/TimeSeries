@@ -23,7 +23,7 @@ import com.google.common.collect.Lists;
 import kafka.serializer.StringDecoder;
 import scala.Tuple2;
 
-public class SparkHelloWorld {
+public class ConsumeStreamFromKafka {
 
 	private static final Pattern SPACE = Pattern.compile(" ");
 
