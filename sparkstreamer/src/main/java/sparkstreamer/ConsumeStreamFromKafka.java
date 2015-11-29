@@ -38,7 +38,7 @@ public class ConsumeStreamFromKafka {
 		Set<String> topics = new HashSet<>();
 		Map<String, String> kafkaParams = new HashMap<>();
 		topics.add("test");
-		kafkaParams.put("metadata.broker.list", "192.168.0.118:9092");
+		kafkaParams.put("metadata.broker.list", "localhost:9092");
 
 		JavaPairInputDStream<String, String> messages = KafkaUtils.createDirectStream(jssc, String.class, String.class,
 				StringDecoder.class, StringDecoder.class, kafkaParams, topics);
