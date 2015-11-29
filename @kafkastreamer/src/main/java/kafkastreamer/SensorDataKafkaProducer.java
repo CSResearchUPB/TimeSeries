@@ -1,3 +1,5 @@
+package kafkastreamer;
+
 import java.util.Properties;
 
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -14,11 +16,9 @@ public class SensorDataKafkaProducer {
 		props.put("key.serializer", StringSerializer.class);
 		props.put("value.serializer", StringSerializer.class);
 
-		KafkaProducer<String, String> producer = new KafkaProducer<String, String>(
-				props);
+		KafkaProducer<String, String> producer = new KafkaProducer<String, String>(props);
 
-		ProducerRecord<String, String> record = new ProducerRecord<String, String>(
-				"test", "java remote test 3");
+		ProducerRecord<String, String> record = new ProducerRecord<String, String>("test", "java remote test 3");
 
 		producer.send(record);
 
