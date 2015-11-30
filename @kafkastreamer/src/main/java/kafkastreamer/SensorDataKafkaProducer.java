@@ -12,13 +12,13 @@ public class SensorDataKafkaProducer {
 
 		Properties props = new Properties();
 
-		props.put("bootstrap.servers", "192.168.0.114:9092");
+		props.put("bootstrap.servers", "localhost:9092");
 		props.put("key.serializer", StringSerializer.class);
 		props.put("value.serializer", StringSerializer.class);
 
 		KafkaProducer<String, String> producer = new KafkaProducer<String, String>(props);
 
-		ProducerRecord<String, String> record = new ProducerRecord<String, String>("test", "java remote test 3");
+		ProducerRecord<String, String> record = new ProducerRecord<String, String>("test", "java remote test 6");
 
 		producer.send(record);
 
