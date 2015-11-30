@@ -1,4 +1,4 @@
-package sparkstreamer;
+package sparkjobs;
 
 import java.util.HashMap;
 import java.util.HashSet;
@@ -13,7 +13,7 @@ import org.apache.spark.streaming.kafka.KafkaUtils;
 
 import kafka.serializer.StringDecoder;
 
-public class ConsumeStreamFromKafka {
+public class ProcessTimeSeriesSensorData {
 
 	public static void main(String[] args) {
 

@@ -1,4 +1,4 @@
-package sparkstreamer;
+package sparkjobs;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -7,16 +7,13 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.regex.Pattern;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.HBaseConfiguration;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.Connection;
 import org.apache.hadoop.hbase.client.ConnectionFactory;
-import org.apache.hadoop.hbase.client.Get;
 import org.apache.hadoop.hbase.client.Put;
-import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.client.Table;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.spark.SparkConf;
@@ -30,7 +27,7 @@ import org.apache.spark.streaming.kafka.KafkaUtils;
 import kafka.serializer.StringDecoder;
 import scala.Tuple2;
 
-public class ReadFromKafkaWriteToHbase {
+public class PersistSensorData {
 
 	public static void main(String[] args) throws IOException {
 
@@ -43,13 +40,6 @@ public class ReadFromKafkaWriteToHbase {
 		Connection connection = ConnectionFactory.createConnection(conf);
 
 		Table testTable = connection.getTable(TableName.valueOf("test"));
-
-		Get g = new Get(Bytes.toBytes("row5"));
-		Result r = testTable.get(g);
-
-		System.out.println(r);
-
-		// ----------------------------------//
 
 		SparkConf sparkConf = new SparkConf().setAppName("spark").setMaster("local");
 
@@ -81,6 +71,8 @@ public class ReadFromKafkaWriteToHbase {
 				}
 
 				testTable.put(newRows);
+
+				System.out.println("Writing: " + newRows);
 
 				return null;
 			}
