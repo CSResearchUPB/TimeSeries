@@ -29,6 +29,8 @@ import scala.Tuple2;
 
 public class PersistSensorData {
 
+	public static int i = 0;
+
 	public static void main(String[] args) throws IOException {
 
 		Configuration conf = null;
@@ -39,11 +41,11 @@ public class PersistSensorData {
 
 		Connection connection = ConnectionFactory.createConnection(conf);
 
-		Table testTable = connection.getTable(TableName.valueOf("test"));
+		Table testTable = connection.getTable(TableName.valueOf("sensordata"));
 
 		SparkConf sparkConf = new SparkConf().setAppName("spark").setMaster("local");
 
-		JavaStreamingContext jssc = new JavaStreamingContext(sparkConf, Durations.seconds(5));
+		JavaStreamingContext jssc = new JavaStreamingContext(sparkConf, Durations.seconds(10));
 
 		Set<String> topics = new HashSet<>();
 		Map<String, String> kafkaParams = new HashMap<>();
@@ -53,29 +55,23 @@ public class PersistSensorData {
 		JavaPairInputDStream<String, String> messages = KafkaUtils.createDirectStream(jssc, String.class, String.class,
 				StringDecoder.class, StringDecoder.class, kafkaParams, topics);
 
-		messages.print();
-		
 		messages.foreachRDD(new Function<JavaPairRDD<String, String>, Void>() {
 
 			@Override
 			public Void call(JavaPairRDD<String, String> v1) throws Exception {
 
-				int i = 0;
-
 				List<Put> newRows = new ArrayList<>();
 
 				for (Tuple2<String, String> tuple : v1.collect()) {
 
-					Put put = new Put(Bytes.toBytes("row" + (i++)));
-					put.addColumn(Bytes.toBytes("cf"), Bytes.toBytes("json"), Bytes.toBytes(tuple.toString()));
+					Put put = new Put(Bytes.toBytes("" + i++));
+					put.addColumn(Bytes.toBytes("cf"), Bytes.toBytes("json"), Bytes.toBytes(tuple._2));
 					newRows.add(put);
 
+					System.out.println("Adding row " + i + " with value " + tuple._2);
 				}
-
 				testTable.put(newRows);
-
-				System.out.println("Writing: " + newRows);
-
+				System.out.println("Added " + newRows.size() + " rows.");
 				return null;
 			}
 		});
