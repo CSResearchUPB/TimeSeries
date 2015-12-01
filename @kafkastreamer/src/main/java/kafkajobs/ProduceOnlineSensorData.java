@@ -1,6 +1,7 @@
 package kafkajobs;
 
 import java.io.File;
+import java.io.FileReader;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -13,6 +14,11 @@ import java.util.stream.Collectors;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.json.simple.JSONObject;
+import org.json.simple.parser.JSONParser;
+import org.json.simple.parser.ParseException;
+
+import serializers.JsonEncoder;
 
 public class ProduceOnlineSensorData {
 
@@ -29,27 +35,36 @@ public class ProduceOnlineSensorData {
 			}
 		});
 
-		for (File file : dataset) {
-			System.out.println(file.getName());
-		}
-
-		if (true) {
-			return;
-		}
+		JSONParser parser = new JSONParser();
 
 		Properties props = new Properties();
 
 		props.put("bootstrap.servers", "localhost:9092");
 		props.put("key.serializer", StringSerializer.class);
-		props.put("value.serializer", StringSerializer.class);
+		props.put("value.serializer", JsonEncoder.class);
 
-		KafkaProducer<String, String> producer = new KafkaProducer<String, String>(props);
+		KafkaProducer<String, JSONObject> producer = new KafkaProducer<String, JSONObject>(props);
 
-		ProducerRecord<String, String> record = new ProducerRecord<String, String>("test", "java remote test 6");
+		for (File file : dataset) {
+			Object obj = null;
+			try {
+				obj = parser.parse(new FileReader(file));
+			} catch (ParseException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+			JSONObject jsonObject = (JSONObject) obj;
 
-		producer.send(record);
+			ProducerRecord<String, JSONObject> message = new ProducerRecord<String, JSONObject>("test", jsonObject);
+			producer.send(message);
+			System.out.println("Sent message" + message);
 
-		System.out.println("Sent message" + record);
+			try {
+				Thread.sleep(1000);
+			} catch (InterruptedException ex) {
+				Thread.currentThread().interrupt();
+			}
+		}
 
 		producer.close();
 
