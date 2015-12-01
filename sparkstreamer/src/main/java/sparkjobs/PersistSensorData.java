@@ -53,6 +53,8 @@ public class PersistSensorData {
 		JavaPairInputDStream<String, String> messages = KafkaUtils.createDirectStream(jssc, String.class, String.class,
 				StringDecoder.class, StringDecoder.class, kafkaParams, topics);
 
+		messages.print();
+		
 		messages.foreachRDD(new Function<JavaPairRDD<String, String>, Void>() {
 
 			@Override
@@ -65,7 +67,7 @@ public class PersistSensorData {
 				for (Tuple2<String, String> tuple : v1.collect()) {
 
 					Put put = new Put(Bytes.toBytes("row" + (i++)));
-					put.addColumn(Bytes.toBytes("cf"), Bytes.toBytes("a"), Bytes.toBytes(tuple.toString()));
+					put.addColumn(Bytes.toBytes("cf"), Bytes.toBytes("json"), Bytes.toBytes(tuple.toString()));
 					newRows.add(put);
 
 				}
