@@ -104,77 +104,124 @@ public class ProcessStreamingTimeSeriesSensorData {
 				JavaRDD<Vector> vectorData = v1.map(tuple -> tuple._2);
 
 				// Calc stats
-				MultivariateStatisticalSummary summary = Statistics.colStats(vectorData.rdd());
 
-				double[] m = summary.mean().toArray();
-				double[] v = summary.variance().toArray();
-				double[] std = new double[100];
+				if (!vectorData.isEmpty()) {
 
-				for (int i = 0; i < v.length; i++) {
-					std[i] = Math.sqrt(v[i]);
-				}
+					MultivariateStatisticalSummary summary = Statistics.colStats(vectorData.rdd());
 
-				RealVector mean = MatrixUtils.createRealVector(m);
-				RealVector standardDeviation = MatrixUtils.createRealVector(std);
-				double stdFactor = 1.5;
+					double[] m = summary.mean().toArray();
+					double[] v = summary.variance().toArray();
+					double[] std = new double[v.length];
 
-				RealVector minValues = mean.subtract(standardDeviation.mapMultiply(stdFactor));
-				RealVector maxValues = mean.add(standardDeviation.mapMultiply(stdFactor));
-
-				System.out.println(Vectors.dense(m)); // a dense vector
-														// containing the mean
-				// value for each column
-				System.out.println(Vectors.dense(v)); // column-wise variance
-				System.out.println(Vectors.dense(std)); // column-wise standard
-														// deviation
-
-				JavaRDD<Tuple2<String, Vector>> outliers = v1
-						.map(new Function<Tuple2<String, Vector>, Tuple2<String, Vector>>() {
-
-					@Override
-					public Tuple2<String, Vector> call(Tuple2<String, Vector> v1) throws Exception {
-
-						RealVector values = MatrixUtils.createRealVector(v1._2.toArray());
-
-						RealVector minOutliers = values.subtract(minValues);
-						RealVector maxOutliers = values.subtract(maxValues);
-
-						minOutliers.mapToSelf(new UnivariateFunction() {
-
-							@Override
-							public double value(double x) {
-
-								// TP should be negative
-								if (x > 0L) {
-									return 1L;
-								} else
-									return 0L;
-
-							}
-						});
-
-						maxOutliers.mapToSelf(new UnivariateFunction() {
-
-							@Override
-							public double value(double x) {
-
-								// TP should be positive
-								if (x < 0L) {
-									return 1L;
-								} else
-									return 0L;
-							}
-						});
-
-						RealVector outliers = minOutliers.add(maxOutliers);
-
-						System.out.println(v1._1() + " " + outliers.getEntry(0));
-
-						return new Tuple2<String, Vector>(v1._1, Vectors.dense(outliers.toArray()));
-
+					for (int i = 0; i < v.length; i++) {
+						std[i] = Math.sqrt(v[i]);
 					}
-				});
 
+					RealVector mean = MatrixUtils.createRealVector(m);
+					RealVector standardDeviation = MatrixUtils.createRealVector(std);
+					double stdFactor = 1.5;
+
+					RealVector minValues = mean.subtract(standardDeviation.mapMultiply(stdFactor));
+					RealVector maxValues = mean.add(standardDeviation.mapMultiply(stdFactor));
+
+					System.out.println(Vectors.dense(m)); // a dense vector
+															// containing the
+															// mean
+					// value for each column
+					System.out.println(Vectors.dense(v)); // column-wise
+															// variance
+					System.out.println(Vectors.dense(std)); // column-wise
+															// standard
+															// deviation
+
+					JavaRDD<Tuple2<String, Vector>> outliers = v1
+							.map(new Function<Tuple2<String, Vector>, Tuple2<String, Vector>>() {
+
+						@Override
+						public Tuple2<String, Vector> call(Tuple2<String, Vector> v1) throws Exception {
+
+							RealVector values = MatrixUtils.createRealVector(v1._2.toArray());
+
+							System.out.println("Values");
+							for (int i = 0; i < values.getDimension(); i++) {
+								System.out.println(values.getEntry(i));
+							}
+
+							System.out.println("-----------");
+
+							System.out.println("MInValues");
+							for (int i = 0; i < minValues.getDimension(); i++) {
+								System.out.println(minValues.getEntry(i));
+							}
+
+							System.out.println("-----------");
+
+							System.out.println("MAXValues");
+							for (int i = 0; i < maxValues.getDimension(); i++) {
+								System.out.println(maxValues.getEntry(i));
+							}
+
+							System.out.println("-----------");
+
+							RealVector minOutliers = values.subtract(minValues);
+							System.out.println("MinOutliers");
+							for (int i = 0; i < minOutliers.getDimension(); i++) {
+								System.out.println(minOutliers.getEntry(i));
+							}
+
+							System.out.println("-----------");
+
+							RealVector maxOutliers = values.subtract(maxValues);
+							System.out.println("MaxOutliers");
+							for (int i = 0; i < maxOutliers.getDimension(); i++) {
+								System.out.println(maxOutliers.getEntry(i));
+							}
+
+							System.out.println("-----------");
+
+							minOutliers.mapToSelf(new UnivariateFunction() {
+
+								@Override
+								public double value(double x) {
+
+									// TP should be negative
+									if (x < 0L) {
+										return 1L;
+									} else
+										return 0L;
+
+								}
+							});
+
+							maxOutliers.mapToSelf(new UnivariateFunction() {
+
+								@Override
+								public double value(double x) {
+
+									// TP should be positive
+									if (x > 0L) {
+										return 1L;
+									} else
+										return 0L;
+								}
+							});
+
+							RealVector outliers = minOutliers.add(maxOutliers);
+
+							System.out.println("Outliers");
+							System.out.println("##################");
+							System.out.print(v1._1());
+							for (int i = 0; i < outliers.getDimension(); i++) {
+								System.out.print(" " + outliers.getEntry(i) + " ");
+							}
+							System.out.println("##################");
+							return new Tuple2<String, Vector>(v1._1, Vectors.dense(outliers.toArray()));
+
+						}
+					});
+
+					System.out.println(outliers.count());
+				}
 				return null;
 			}
 		});
