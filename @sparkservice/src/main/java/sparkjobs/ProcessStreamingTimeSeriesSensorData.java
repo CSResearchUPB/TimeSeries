@@ -1,26 +1,46 @@
 package sparkjobs;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Set;
 
+import org.apache.commons.math3.analysis.UnivariateFunction;
+import org.apache.commons.math3.linear.FieldMatrix;
+import org.apache.commons.math3.linear.MatrixUtils;
+import org.apache.commons.math3.linear.RealMatrix;
+import org.apache.commons.math3.linear.RealVector;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.api.java.function.Function;
+import org.apache.spark.api.java.function.Function2;
+import org.apache.spark.mllib.linalg.Matrix;
 import org.apache.spark.mllib.linalg.Vector;
 import org.apache.spark.mllib.linalg.Vectors;
 import org.apache.spark.mllib.stat.MultivariateStatisticalSummary;
 import org.apache.spark.mllib.stat.Statistics;
 import org.apache.spark.streaming.Durations;
+import org.apache.spark.streaming.api.java.JavaDStream;
+import org.apache.spark.streaming.api.java.JavaPairInputDStream;
 import org.apache.spark.streaming.api.java.JavaStreamingContext;
+import org.apache.spark.streaming.kafka.KafkaUtils;
+import org.codehaus.jackson.JsonNode;
+import org.codehaus.jackson.JsonProcessingException;
 import org.codehaus.jackson.map.ObjectMapper;
-import org.json.simple.parser.JSONParser;
+
+import kafka.serializer.StringDecoder;
+import scala.Function1;
+import scala.Tuple2;
+import scala.runtime.BoxedUnit;
 
 public class ProcessStreamingTimeSeriesSensorData {
 
 	private static final ObjectMapper objectMapper = new ObjectMapper();
 
+	@SuppressWarnings("serial")
 	public static void main(String[] args) {
-
-		JSONParser parser = new JSONParser();
 
 		SparkConf conf = new SparkConf().setAppName("spark").setMaster("local");
 
@@ -28,70 +48,141 @@ public class ProcessStreamingTimeSeriesSensorData {
 
 		System.out.println("Running spark");
 
-		// Set<String> topics = new HashSet<>();
-		// Map<String, String> kafkaParams = new HashMap<>();
-		// topics.add("test");
-		// kafkaParams.put("metadata.broker.list", "localhost:9092");
-		//
-		// JavaPairInputDStream<String, String> messages =
-		// KafkaUtils.createDirectStream(jssc, String.class, String.class,
-		// StringDecoder.class, StringDecoder.class, kafkaParams, topics);
-		//
-		// messages.print();
-		//
-		// // Prepare the data
-		//
-		// messages.foreachRDD(new Function<JavaPairRDD<String, String>, Void>()
-		// {
-		//
-		// @Override
-		// public Void call(JavaPairRDD<String, String> v1) throws Exception {
-		//
-		// for (Tuple2<String, String> tuple : v1.collect()) {
-		//
-		// JSONObject json = (JSONObject) parser.parse(tuple._2);
-		//
-		// System.out.println(json);
-		//
-		// }
-		// return null;
-		//
-		// }
-		// });
+		Set<String> topics = new HashSet<>();
+		Map<String, String> kafkaParams = new HashMap<>();
+		topics.add("test");
+		kafkaParams.put("metadata.broker.list", "localhost:9092");
 
-		List<Vector> vectorList = new ArrayList() {
-			{
-				add(Vectors.dense(1.0, 0.0, 3.0));
-				add(Vectors.dense(2.0, 0.0, 3.0));
-				add(Vectors.dense(3.0, 0.0, 3.0));
-				add(Vectors.dense(1.0, 5.0, 3.0));
+		JavaPairInputDStream<String, String> messages = KafkaUtils.createDirectStream(jssc, String.class, String.class,
+				StringDecoder.class, StringDecoder.class, kafkaParams, topics);
+
+		JavaDStream<Tuple2<String, Vector>> vectorStream = messages
+				.map(new Function<Tuple2<String, String>, Tuple2<String, Vector>>() {
+					@Override
+					public Tuple2<String, Vector> call(Tuple2<String, String> tuple2) {
+
+						JsonNode json = null;
+						try {
+							json = objectMapper.readTree(tuple2._2);
+						} catch (JsonProcessingException e) {
+							// TODO Auto-generated catch block
+							e.printStackTrace();
+						} catch (IOException e) {
+							// TODO Auto-generated catch block
+							e.printStackTrace();
+						}
+
+						String timestamp = json.path("record").path("sdata").path(0).path("timestamp").asText();
+						double extTemp = json.path("record").path("sdata").path(0).path("sensors").path(0).path("value")
+								.getDoubleValue();
+						double intTemp = json.path("record").path("sdata").path(0).path("sensors").path(3).path("value")
+								.getDoubleValue();
+						double intUmd = json.path("record").path("sdata").path(0).path("sensors").path(4).path("value")
+								.getDoubleValue();
+
+						Vector values = Vectors.dense(extTemp, intTemp, intUmd);
+
+						System.out.println(timestamp + " " + extTemp + " " + intTemp + " " + intUmd);
+
+						Tuple2<String, Vector> tuple = new Tuple2<String, Vector>(timestamp, values);
+
+						return tuple;
+					}
+				});
+
+		JavaDStream<Tuple2<String, Vector>> windowVectorStream = vectorStream.window(Durations.seconds(10),
+				Durations.seconds(10));
+
+		windowVectorStream.foreachRDD(new Function<JavaRDD<Tuple2<String, Vector>>, Void>() {
+
+			@Override
+			public Void call(JavaRDD<Tuple2<String, Vector>> v1) throws Exception {
+
+				System.out.println(v1.count());
+
+				// Get vector data
+				JavaRDD<Vector> vectorData = v1.map(tuple -> tuple._2);
+
+				// Calc stats
+				MultivariateStatisticalSummary summary = Statistics.colStats(vectorData.rdd());
+
+				double[] m = summary.mean().toArray();
+				double[] v = summary.variance().toArray();
+				double[] std = new double[100];
+
+				for (int i = 0; i < v.length; i++) {
+					std[i] = Math.sqrt(v[i]);
+				}
+
+				RealVector mean = MatrixUtils.createRealVector(m);
+				RealVector standardDeviation = MatrixUtils.createRealVector(std);
+				double stdFactor = 1.5;
+
+				RealVector minValues = mean.subtract(standardDeviation.mapMultiply(stdFactor));
+				RealVector maxValues = mean.add(standardDeviation.mapMultiply(stdFactor));
+
+				System.out.println(Vectors.dense(m)); // a dense vector
+														// containing the mean
+				// value for each column
+				System.out.println(Vectors.dense(v)); // column-wise variance
+				System.out.println(Vectors.dense(std)); // column-wise standard
+														// deviation
+
+				JavaRDD<Tuple2<String, Vector>> outliers = v1
+						.map(new Function<Tuple2<String, Vector>, Tuple2<String, Vector>>() {
+
+					@Override
+					public Tuple2<String, Vector> call(Tuple2<String, Vector> v1) throws Exception {
+
+						RealVector values = MatrixUtils.createRealVector(v1._2.toArray());
+
+						RealVector minOutliers = values.subtract(minValues);
+						RealVector maxOutliers = values.subtract(maxValues);
+
+						minOutliers.mapToSelf(new UnivariateFunction() {
+
+							@Override
+							public double value(double x) {
+
+								// TP should be negative
+								if (x > 0L) {
+									return 1L;
+								} else
+									return 0L;
+
+							}
+						});
+
+						maxOutliers.mapToSelf(new UnivariateFunction() {
+
+							@Override
+							public double value(double x) {
+
+								// TP should be positive
+								if (x < 0L) {
+									return 1L;
+								} else
+									return 0L;
+							}
+						});
+
+						RealVector outliers = minOutliers.add(maxOutliers);
+
+						System.out.println(v1._1() + " " + outliers.getEntry(0));
+
+						return new Tuple2<String, Vector>(v1._1, Vectors.dense(outliers.toArray()));
+
+					}
+				});
+
+				return null;
 			}
-		};
-
-		JavaRDD<Vector> vectorRDD = jssc.sparkContext().parallelize(vectorList);
-
-		MultivariateStatisticalSummary summary = Statistics.colStats(vectorRDD.rdd());
-
-		Vector v = summary.variance();
-
-		System.out.println(summary.mean()); // a dense vector containing the
-											// mean value for each column
-		System.out.println(v); // column-wise variance
-		System.out.println(summary.numNonzeros()); // number of nonzeros in each
-													// column
-
-		double[] t = v.toArray();
-
-		for (int i = 0; i < t.length; i++) {
-
-			System.out.println(Math.sqrt(t[i]));
-
-		}
+		});
 
 		// Math.sqrt();
 
-		// Start the computation
 		jssc.start();
+
 		jssc.awaitTermination();
 
 	}

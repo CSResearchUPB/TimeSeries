@@ -31,7 +31,8 @@ public class ProduceOnlineSensorData {
 
 			@Override
 			public int compare(File file1, File file2) {
-				return new Long(file1.lastModified()).compareTo(new Long(file2.lastModified()));
+				return new Integer(file1.getName().substring(5))
+						.compareTo(Integer.parseInt(file2.getName().substring(5)));
 			}
 		});
 
@@ -55,7 +56,8 @@ public class ProduceOnlineSensorData {
 			}
 			JSONObject jsonObject = (JSONObject) obj;
 
-			ProducerRecord<String, JSONObject> message = new ProducerRecord<String, JSONObject>("test", jsonObject);
+			ProducerRecord<String, JSONObject> message = new ProducerRecord<String, JSONObject>("test", 0,
+					"farmsensors", jsonObject);
 			producer.send(message);
 			System.out.println("Sent message" + message);
 
