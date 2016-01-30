@@ -19,10 +19,9 @@
 
 		<script type="text/javascript">
 			function updateChartData(xhr, status, args) {
-				console.log(args.chartData);
 				var jsonResponse = JSON.parse(args.chartData);
-				//parse it, process it and load it into the chart
-				console.log(jsonResponse.x);
+				var timestamps = jsonResponse.x;
+				console.log(timestamps);
 			}
 
 			// 			console.log(Plotly.BUILD);
