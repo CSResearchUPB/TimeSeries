@@ -32,9 +32,6 @@ public class ProcessHistoricalData {
 
 		JavaSparkContext jsc = new JavaSparkContext(sparkConf);
 		
-		
-		
-		
 		jsc.stop();
 
 	}

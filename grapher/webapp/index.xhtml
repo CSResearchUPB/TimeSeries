@@ -1,0 +1,43 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"
+	xmlns:ui="http://java.sun.com/jsf/facelets"
+	xmlns:h="http://java.sun.com/jsf/html"
+	xmlns:f="http://java.sun.com/jsf/core"
+	xmlns:p="http://primefaces.org/ui">
+
+<h:head />
+
+<h:body>
+
+	<h:form id="graphform">
+
+		<p:outputLabel value="Grapher" />
+
+		<p:poll autoStart="true" interval="2"
+			listener="#{chartManagedBean.prepareChartData()}"
+			oncomplete="updateChartData(xhr, status, args);" />
+
+		<script type="text/javascript">
+			function updateChartData(xhr, status, args) {
+				console.log(args.chartData);
+				var jsonResponse = JSON.parse(args.chartData);
+				//parse it, process it and load it into the chart
+				console.log(jsonResponse.x);
+			}
+
+			// 			console.log(Plotly.BUILD);
+			// 			TESTER = document.getElementById('tester');
+
+			// 			Plotly.plot(TESTER, [ {
+			// 				x : [ 1, 2, 3, 4, 5 ],
+			// 				y : [ 1, 2, 4, 8, 16 ]
+			// 			} ], {
+			// 				margin : {
+			// 					t : 0
+			// 				}
+			// 			});
+		</script>
+
+	</h:form>
+</h:body>
+</html>
