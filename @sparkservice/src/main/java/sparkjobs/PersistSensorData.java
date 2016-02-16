@@ -54,9 +54,9 @@ public class PersistSensorData {
 
 		JavaPairInputDStream<String, String> messages = KafkaUtils.createDirectStream(jssc, String.class, String.class,
 				StringDecoder.class, StringDecoder.class, kafkaParams, topics);
-
+		
 		messages.foreachRDD(new Function<JavaPairRDD<String, String>, Void>() {
-
+			
 			@Override
 			public Void call(JavaPairRDD<String, String> v1) throws Exception {
 
@@ -81,5 +81,5 @@ public class PersistSensorData {
 		jssc.awaitTermination();
 
 	}
-
+	
 }

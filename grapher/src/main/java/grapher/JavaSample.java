@@ -27,6 +27,10 @@ public class JavaSample {
 
 			// System.out.println(new DateTime(dt.getMillis()));
 		});
+		
+		Integer[] bau = {1,2,3};
+		
+	
 	}
 
 }

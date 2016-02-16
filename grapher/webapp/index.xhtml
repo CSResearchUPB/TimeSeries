@@ -5,7 +5,11 @@
 	xmlns:f="http://java.sun.com/jsf/core"
 	xmlns:p="http://primefaces.org/ui">
 
-<h:head />
+<h:head>
+
+	<h:outputScript library="js" name="plotly-latest.min.js" />
+
+</h:head>
 
 <h:body>
 
@@ -13,29 +17,48 @@
 
 		<p:outputLabel value="Grapher" />
 
-		<p:poll autoStart="true" interval="2"
+		<p:poll autoStart="true" interval="5"
 			listener="#{chartManagedBean.prepareChartData()}"
 			oncomplete="updateChartData(xhr, status, args);" />
 
 		<script type="text/javascript">
 			function updateChartData(xhr, status, args) {
-				var jsonResponse = JSON.parse(args.chartData);
-				var timestamps = jsonResponse.x;
-				console.log(timestamps);
+				console.log(args);
+				var x = JSON.parse(args.timestamps);
+				var y = JSON.parse(args.int_temp);
+
+				TESTER = document.getElementById('tester');
+				
+				var trace1 = {
+						x,
+						y,
+						mode: 'lines',
+						name: 'Int temp'
+				};
+				
+				var x = JSON.parse(args.timestamps_outliers);
+				var y = JSON.parse(args.int_temp_out);
+				
+				var trace2 = {
+						x,
+						y,
+						mode: 'markers',
+						name: 'Outliers'
+				};
+				
+				var layout = {
+						  title:'Internal temperature GreenHouse 2',
+						  height: 500,
+						  width: 1200
+						};
+				
+				var data = [trace1, trace2];
+
+				Plotly.newPlot('tester', data, layout);
 			}
-
-			// 			console.log(Plotly.BUILD);
-			// 			TESTER = document.getElementById('tester');
-
-			// 			Plotly.plot(TESTER, [ {
-			// 				x : [ 1, 2, 3, 4, 5 ],
-			// 				y : [ 1, 2, 4, 8, 16 ]
-			// 			} ], {
-			// 				margin : {
-			// 					t : 0
-			// 				}
-			// 			});
 		</script>
+
+		<div id="tester"></div>
 
 	</h:form>
 </h:body>

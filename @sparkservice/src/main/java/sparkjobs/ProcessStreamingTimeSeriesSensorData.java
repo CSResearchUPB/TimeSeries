@@ -9,9 +9,18 @@ import java.util.Set;
 import org.apache.commons.math3.analysis.UnivariateFunction;
 import org.apache.commons.math3.linear.MatrixUtils;
 import org.apache.commons.math3.linear.RealVector;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.hbase.HBaseConfiguration;
+import org.apache.hadoop.hbase.TableName;
+import org.apache.hadoop.hbase.client.Connection;
+import org.apache.hadoop.hbase.client.ConnectionFactory;
+import org.apache.hadoop.hbase.client.Put;
+import org.apache.hadoop.hbase.client.Table;
+import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.function.Function;
+import org.apache.spark.api.java.function.VoidFunction;
 import org.apache.spark.mllib.linalg.Vector;
 import org.apache.spark.mllib.linalg.Vectors;
 import org.apache.spark.mllib.stat.MultivariateStatisticalSummary;
@@ -24,6 +33,9 @@ import org.apache.spark.streaming.kafka.KafkaUtils;
 import org.codehaus.jackson.JsonNode;
 import org.codehaus.jackson.JsonProcessingException;
 import org.codehaus.jackson.map.ObjectMapper;
+import org.joda.time.DateTime;
+import org.joda.time.format.DateTimeFormat;
+import org.joda.time.format.DateTimeFormatter;
 
 import kafka.serializer.StringDecoder;
 import scala.Tuple2;
@@ -33,7 +45,7 @@ public class ProcessStreamingTimeSeriesSensorData {
 	private static final ObjectMapper objectMapper = new ObjectMapper();
 
 	@SuppressWarnings("serial")
-	public static void main(String[] args) {
+	public static void main(String[] args) throws IOException {
 
 		SparkConf conf = new SparkConf().setAppName("spark").setMaster("local");
 
@@ -75,7 +87,7 @@ public class ProcessStreamingTimeSeriesSensorData {
 
 						Vector values = Vectors.dense(extTemp, intTemp, intUmd);
 
-						System.out.println(timestamp + " " + extTemp + " " + intTemp + " " + intUmd);
+						System.out.println("Raw data: " + timestamp + " " + extTemp + " " + intTemp + " " + intUmd);
 
 						Tuple2<String, Vector> tuple = new Tuple2<String, Vector>(timestamp, values);
 
@@ -89,12 +101,12 @@ public class ProcessStreamingTimeSeriesSensorData {
 		windowVectorStream.foreachRDD(new Function<JavaRDD<Tuple2<String, Vector>>, Void>() {
 
 			@Override
-			public Void call(JavaRDD<Tuple2<String, Vector>> v1) throws Exception {
+			public Void call(JavaRDD<Tuple2<String, Vector>> rdd) throws Exception {
 
-				System.out.println(v1.count());
+				System.out.println("RDD #elements: " + rdd.count());
 
-				// Get vector data
-				JavaRDD<Vector> vectorData = v1.map(tuple -> tuple._2);
+				// Get a Java RDD with vector data
+				JavaRDD<Vector> vectorData = rdd.map(tuple -> tuple._2);
 
 				// Calc stats
 
@@ -117,23 +129,31 @@ public class ProcessStreamingTimeSeriesSensorData {
 					RealVector minValues = mean.subtract(standardDeviation.mapMultiply(stdFactor));
 					RealVector maxValues = mean.add(standardDeviation.mapMultiply(stdFactor));
 
-					System.out.println(Vectors.dense(m)); // a dense vector
-															// containing the
-															// mean
-					// value for each column
-					System.out.println(Vectors.dense(v)); // column-wise
-															// variance
-					System.out.println(Vectors.dense(std)); // column-wise
-															// standard
-															// deviation
+					// a dense vector containing the mean value for each column
+					System.out.println("RDD mean: " + Vectors.dense(m));
+					// column-wise variance
+					System.out.println("RDD variance: " + Vectors.dense(v));
+					// column-wise standard deviation
+					System.out.println("RDD standard deviation: " + Vectors.dense(std));
 
-					JavaRDD<Tuple2<String, Vector>> outliers = v1
-							.map(new Function<Tuple2<String, Vector>, Tuple2<String, Vector>>() {
+					// List<Put> newRows = new ArrayList<>();
+
+					rdd.foreach(new VoidFunction<Tuple2<String, Vector>>() {
 
 						@Override
-						public Tuple2<String, Vector> call(Tuple2<String, Vector> v1) throws Exception {
+						public void call(Tuple2<String, Vector> rddEntry) throws Exception {
 
-							RealVector values = MatrixUtils.createRealVector(v1._2.toArray());
+							Configuration hbaseConf = null;
+
+							hbaseConf = HBaseConfiguration.create();
+							hbaseConf.set("hbase.zookeeper.quorum", "localhost");
+							hbaseConf.set("hbase.zookeeper.property.clientPort", "2182");
+
+							Connection connection = ConnectionFactory.createConnection(hbaseConf);
+
+							Table sensors = connection.getTable(TableName.valueOf("sensortest2"));
+
+							RealVector values = MatrixUtils.createRealVector(rddEntry._2.toArray());
 
 							System.out.println("Values");
 							for (int i = 0; i < values.getDimension(); i++) {
@@ -203,17 +223,58 @@ public class ProcessStreamingTimeSeriesSensorData {
 
 							System.out.println("Outliers");
 							System.out.println("##################");
-							System.out.print(v1._1());
+							System.out.print(rddEntry._1());
 							for (int i = 0; i < outliers.getDimension(); i++) {
 								System.out.print(" " + outliers.getEntry(i) + " ");
 							}
 							System.out.println("##################");
-							return new Tuple2<String, Vector>(v1._1, Vectors.dense(outliers.toArray()));
+
+							// Save results to Hbase
+							DateTimeFormatter formatter = DateTimeFormat.forPattern("YYYY-MM-dd HH:mm:ss");
+							DateTime dt = formatter.parseDateTime(rddEntry._1);
+							Put put = new Put(Bytes.toBytes("f1g1_" + dt.getMillis())); // Should
+																						// use
+																						// the
+																						// Kafka
+																						// topic
+																						// name
+							put.addColumn(Bytes.toBytes("d"), Bytes.toBytes("it"),
+									Bytes.toBytes(String.valueOf(values.getEntry(0))));
+							put.addColumn(Bytes.toBytes("o"), Bytes.toBytes("it"),
+									Bytes.toBytes(String.valueOf(outliers.getEntry(0)*values.getEntry(0))));
+							put.addColumn(Bytes.toBytes("d"), Bytes.toBytes("et"),
+									Bytes.toBytes(String.valueOf(values.getEntry(1))));
+							put.addColumn(Bytes.toBytes("o"), Bytes.toBytes("et"),
+									Bytes.toBytes(String.valueOf(outliers.getEntry(1)*values.getEntry(1))));
+							put.addColumn(Bytes.toBytes("d"), Bytes.toBytes("um"),
+									Bytes.toBytes(String.valueOf(values.getEntry(2))));
+							put.addColumn(Bytes.toBytes("o"), Bytes.toBytes("um"),
+									Bytes.toBytes(String.valueOf(outliers.getEntry(2)*values.getEntry(2))));
+							// // newRows.add(put);
+							sensors.put(put);
+							// System.out.println("Adding row " + "f1g1" +
+							// rddEntry._1);
 
 						}
 					});
 
-					System.out.println(outliers.count());
+					// JavaRDD<Tuple2<String, Vector>> outliers2 = rdd
+					// .map(new Function<Tuple2<String, Vector>, Tuple2<String,
+					// Vector>>() {
+					//
+					// @Override
+					// public Tuple2<String, Vector> call(Tuple2<String, Vector>
+					// RddEntry) throws Exception {
+					//
+					// return new Tuple2<String, Vector>(RddEntry._1,
+					// Vectors.dense(outliers.toArray()));
+					//
+					// }
+					//
+					// });
+					//
+					// sensors.put(newRows);
+					// System.out.println("Added " + newRows.size() + " rows.");
 				}
 				return null;
 			}
