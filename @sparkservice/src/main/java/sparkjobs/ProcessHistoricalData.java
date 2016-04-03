@@ -31,6 +31,7 @@ public class ProcessHistoricalData {
 		// $example on$
 		// Load training data
 		DataFrame training = sqlContext.read().format("libsvm").load("src/main/resources/linear_regression_temperature_data.txt");
+		DataFrame test = sqlContext.read().format("libsvm").load("src/main/resources/linear_regression_predict_temperature.txt");
 
 		training.show(false);
 		training.printSchema();
@@ -67,7 +68,7 @@ public class ProcessHistoricalData {
 		LinearRegression lr = new LinearRegression().setMaxIter(100).setRegParam(0.3).setElasticNetParam(0.8);
 
 		// Fit the model
-		LinearRegressionModel lrModel = lr.fit(polyDF);
+		LinearRegressionModel lrModel = lr.setFeaturesCol("polyFeatures").fit(polyDF);
 
 		// Print the coefficients and intercept for linear regression
 		System.out.println("Coefficients: " + lrModel.coefficients() + " Intercept: " + lrModel.intercept());
@@ -81,9 +82,7 @@ public class ProcessHistoricalData {
 		System.out.println("r2: " + trainingSummary.r2());
 		// $example off$
 
-		lrModel.transform(polyDF).show(false);
-		
-		System.out.println(trainingSummary.predictions());
+		lrModel.transform(test).show(false);
 
 		System.out.println(lrModel.explainParams());
 		
