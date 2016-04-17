@@ -23,52 +23,54 @@ public class ProcessHistoricalData {
 	public static void main(String[] args) throws IOException {
 
 		SparkConf sparkConf = new SparkConf().setAppName("spark").setMaster("local");
-
+		
 		JavaSparkContext jsc = new JavaSparkContext(sparkConf);
 
 		SQLContext sqlContext = new SQLContext(jsc);
 
 		// $example on$
 		// Load training data
-		DataFrame training = sqlContext.read().format("libsvm").load("src/main/resources/linear_regression_temperature_data.txt");
-		DataFrame test = sqlContext.read().format("libsvm").load("src/main/resources/linear_regression_predict_temperature.txt");
+		DataFrame training = sqlContext.read().format("libsvm").load("src/main/resources/lr_sample.txt");
+		DataFrame test = sqlContext.read().format("libsvm").load("src/main/resources/lr_sample_test.txt");
 
 		training.show(false);
 		training.printSchema();
 
-		MinMaxScaler scaler = new MinMaxScaler()
-		  .setInputCol("features")
-		  .setOutputCol("scaledFeatures");
-
-		// Compute summary statistics and generate MinMaxScalerModel
-		MinMaxScalerModel scalerModel = scaler.fit(training);
-
-		// rescale each feature to range [min, max].
-		DataFrame scaledData = scalerModel.transform(training);
-		scaledData.show(false);
-		
-		PCAModel pca = new PCA()
-				  .setInputCol("scaledFeatures")
-				  .setOutputCol("pcaFeatures")
-				  .setK(5)
-				  .fit(scaledData);
-
-		DataFrame pcaResults = pca.transform(scaledData);
-		pcaResults.show(false);
-		
+//		MinMaxScaler scaler = new MinMaxScaler()
+//		  .setInputCol("features")
+//		  .setOutputCol("scaledFeatures");
+//
+//		// Compute summary statistics and generate MinMaxScalerModel
+//		MinMaxScalerModel scalerModel = scaler.fit(training);
+//
+//		// rescale each feature to range [min, max].
+//		DataFrame scaledData = scalerModel.transform(training);
+//		scaledData.show(false);
+//		
+//		PCAModel pca = new PCA()
+//				  .setInputCol("scaledFeatures")
+//				  .setOutputCol("pcaFeatures")
+//				  .setK(5)
+//				  .fit(scaledData);
+//
+//		DataFrame pcaResults = pca.transform(scaledData);
+//		pcaResults.show(false);
+//		
 		PolynomialExpansion polyExpansion = new PolynomialExpansion()
-				  .setInputCol("pcaFeatures")
-				  .setOutputCol("polyFeatures")
+				  .setInputCol("features")
+				  .setOutputCol("polyfeatures")
 				  .setDegree(2);
 		
-		DataFrame polyDF = polyExpansion.transform(pcaResults);
+		DataFrame polyDFTraining = polyExpansion.transform(training);
 		
-		polyDF.show(false);
+		polyDFTraining.show(false);
 		
-		LinearRegression lr = new LinearRegression().setMaxIter(100).setRegParam(0.3).setElasticNetParam(0.8);
+		LinearRegression lr = new LinearRegression().setMaxIter(100);//.setRegParam(0.3).setElasticNetParam(0.8);
 
 		// Fit the model
-		LinearRegressionModel lrModel = lr.setFeaturesCol("polyFeatures").fit(polyDF);
+		
+		
+		LinearRegressionModel lrModel = lr.setFeaturesCol("polyfeatures").fit(polyDFTraining);
 
 		// Print the coefficients and intercept for linear regression
 		System.out.println("Coefficients: " + lrModel.coefficients() + " Intercept: " + lrModel.intercept());
@@ -81,15 +83,16 @@ public class ProcessHistoricalData {
 		System.out.println("RMSE: " + trainingSummary.rootMeanSquaredError());
 		System.out.println("r2: " + trainingSummary.r2());
 		// $example off$
-
-		lrModel.transform(test).show(false);
-
 		System.out.println(lrModel.explainParams());
-		
-		
-		jsc.stop();
 
-		System.out.println("bau");
+		System.out.println("Predicting on training data...");
+		lrModel.setFeaturesCol("polyfeatures").transform(polyDFTraining).show(2000,false);
+		
+		DataFrame polyDFTest = polyExpansion.transform(test);
+		System.out.println("Predicting on test data...");
+		lrModel.setFeaturesCol("polyfeatures").transform(polyDFTest).show(1000,false);
+
+		jsc.stop();
 
 	}
 
